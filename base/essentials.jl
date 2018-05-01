@@ -138,34 +138,33 @@ end
 argtail(x, rest...) = rest
 tail(x::Tuple) = argtail(x...)
 
-# TODO: a better / more infer-able definition would pehaps be
-#   tuple_type_head(T::Type) = fieldtype(T::Type{<:Tuple}, 1)
-tuple_type_head(T::UnionAll) = (@_pure_meta; UnionAll(T.var, tuple_type_head(T.body)))
-function tuple_type_head(T::Union)
-    @_pure_meta
-    return Union{tuple_type_head(T.a), tuple_type_head(T.b)}
-end
-function tuple_type_head(T::DataType)
-    @_pure_meta
-    T.name === Tuple.name || throw(MethodError(tuple_type_head, (T,)))
-    return unwrapva(T.parameters[1])
+function tuple_type_head(T::Type)
+    if isa(T, UnionAll)
+        return UnionAll(T.var, tuple_type_head(T.body))
+    elseif isa(T, Union)
+        return Union{tuple_type_head(T.a), tuple_type_head(T.b)}
+    elseif isa(T, DataType) && T.name === Tuple.name
+        return fieldtype(T, 1)
+    end
+    throw(MethodError(tuple_type_head, (T,)))
 end
 
-tuple_type_tail(T::UnionAll) = (@_pure_meta; UnionAll(T.var, tuple_type_tail(T.body)))
-function tuple_type_tail(T::Union)
-    @_pure_meta
-    return Union{tuple_type_tail(T.a), tuple_type_tail(T.b)}
-end
-function tuple_type_tail(T::DataType)
-    @_pure_meta
-    T.name === Tuple.name || throw(MethodError(tuple_type_tail, (T,)))
-    if isvatuple(T) && length(T.parameters) == 1
-        return T
+function tuple_type_tail(T::Type)
+    if isa(T, UnionAll)
+        return UnionAll(T.var, tuple_type_tail(T.body))
+    elseif isa(T, Union)
+        return Union{tuple_type_tail(T.a), tuple_type_tail(T.b)}
+    elseif isa(T, DataType) && T.name === Tuple.name
+        if isvatuple(T) && length(T.parameters) == 1
+            return T
+        end
+        return Tuple{argtail(T.parameters...)...}
     end
-    return Tuple{argtail(T.parameters...)...}
+    throw(MethodError(tuple_type_tail, (T,)))
 end
 
 tuple_type_cons(::Type, ::Type{Union{}}) = Union{}
+
 function tuple_type_cons(::Type{S}, ::Type{T}) where T<:Tuple where S
     @_pure_meta
     Tuple{S, T.parameters...}
